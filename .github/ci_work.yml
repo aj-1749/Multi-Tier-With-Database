@@ -1,9 +1,8 @@
-name: End-to-End DevSecOps CI/CD (Local KIND)
+name: DevSecOps CI/CD Pipeline (KIND)
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
 
 env:
   IMAGE_NAME: hello8989/bankapp
@@ -11,131 +10,128 @@ env:
 
 jobs:
 
-# ==================================================
-# 1️⃣ BUILD & COMPILE
-# ==================================================
-  compile:
+# ===============================
+# 1. BUILD
+# ===============================
+  build:
     runs-on: self-hosted
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: maven
 
-      - name: Maven Compile
+      - name: Compile
         run: mvn clean compile
 
-
-# ==================================================
-# 2️⃣ STATIC SECURITY SCANS
-# ==================================================
-  security_scan:
+# ===============================
+# 2. SECURITY SCAN
+# ===============================
+  security:
     runs-on: self-hosted
-    needs: compile
+    needs: build
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Trivy Filesystem Scan
+      - name: Trivy FS Scan
         run: trivy fs . --severity HIGH,CRITICAL --exit-code 0
 
-      - name: Gitleaks Secret Scan
-        run: gitleaks detect source . --report-format json --report-path gitleaks-report.json
+      - name: Gitleaks Scan
+        run: gitleaks detect --source . --report-path gitleaks.json
 
-
-# ==================================================
-# 3️⃣ UNIT TESTS
-# ==================================================
+# ===============================
+# 3. TEST
+# ===============================
   test:
     runs-on: self-hosted
-    needs: security_scan
+    needs: security
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: maven
-
-      - name: Run Unit Tests
+      - name: Run Tests
         run: mvn test
 
-
-# ==================================================
-# 4️⃣ SONARCLOUD ANALYSIS
-# ==================================================
-  sonarcloud:
+# ===============================
+# 4. SONAR
+# ===============================
+  sonar:
     runs-on: self-hosted
     needs: test
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: SonarCloud Scan
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: Sonar Scan
         run: |
           mvn verify sonar:sonar \
-            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }} \
-            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }} \
-            -Dsonar.host.url=https://sonarcloud.io
+          -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }} \
+          -Dsonar.organization=${{ vars.SONAR_ORG }} \
+          -Dsonar.host.url=https://sonarcloud.io \
+          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
-
-# ==================================================
-# 5️⃣ DOCKER BUILD + IMAGE SCAN + PUSH
-# ==================================================
-  docker_build:
+# ===============================
+# 5. DOCKER BUILD
+# ===============================
+  docker:
     runs-on: self-hosted
-    needs: sonarcloud
+    needs: sonar
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Docker Login
-        run: |
-          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login \
-            -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login \
+             -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
-      - name: Build Docker Image
+      - name: Build Image
         run: |
           docker build -t $IMAGE_NAME:${{ github.sha }} .
           docker tag $IMAGE_NAME:${{ github.sha }} $IMAGE_NAME:latest
 
-      - name: Trivy Image Scan
+      - name: Scan Image
         run: trivy image $IMAGE_NAME:latest --severity HIGH,CRITICAL --exit-code 0
 
-      - name: Push Docker Image
+      - name: Push Image
         run: |
           docker push $IMAGE_NAME:${{ github.sha }}
           docker push $IMAGE_NAME:latest
 
-
-# ==================================================
-# 6️⃣ DEPLOY TO LOCAL KIND K8S
-# ==================================================
-  deploy_kind:
+# ===============================
+# 6. DEPLOY TO KIND
+# ===============================
+  deploy:
     runs-on: self-hosted
-    needs: docker_build
+    needs: docker
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set Kubernetes Context
+      - name: Set K8s Context
         run: kubectl config use-context $K8S_CONTEXT
 
-      - name: Update Image Tag
+      - name: Update Image
         run: |
-          sed -i "s|hello8989/bankapp:latest|hello8989/bankapp:${{ github.sha }}|g" ds.yml
+          sed -i "s|hello8989/bankapp:latest|$IMAGE_NAME:${{ github.sha }}|g" k8s/deployment.yml
 
-      - name: Deploy to KIND
-        run: kubectl apply -f ds.yml
+      - name: Deploy
+        run: kubectl apply -f k8s/deployment.yml
 
-      - name: Verify Rollout
+      - name: Wait for MySQL
+        run: kubectl rollout status deployment/mysql
+
+      - name: Wait for App
+        run: kubectl rollout status deployment/bankapp
+
+      - name: Verify
         run: |
-          kubectl rollout status deployment/bankapp
           kubectl get pods
           kubectl get svc
