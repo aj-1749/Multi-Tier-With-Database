@@ -2,136 +2,172 @@ name: DevSecOps CI/CD Pipeline (KIND)
 
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main
 
 env:
   IMAGE_NAME: hello8989/bankapp
-  K8S_CONTEXT: k8s-lab
+  K8S_CONTEXT: kind-k8s-lab
 
 jobs:
 
-# ===============================
-# 1. BUILD
-# ===============================
+  # ===============================
+  # 1. BUILD
+  # ===============================
   build:
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           java-version: '17'
-          distribution: 'temurin'
+          distribution: temurin
           cache: maven
 
       - name: Compile
         run: mvn clean compile
 
-# ===============================
-# 2. SECURITY SCAN
-# ===============================
+
+  # ===============================
+  # 2. SECURITY SCAN
+  # ===============================
   security:
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux]
     needs: build
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Trivy FS Scan
-        run: trivy fs . --severity HIGH,CRITICAL --exit-code 0
+        run: |
+          trivy fs . \
+            --severity HIGH,CRITICAL \
+            --exit-code 0
 
       - name: Gitleaks Scan
-        run: gitleaks detect --source . --report-path gitleaks.json
+        run: |
+          gitleaks detect \
+            --source . \
+            --report-path gitleaks.json
 
-# ===============================
-# 3. TEST
-# ===============================
+
+  # ===============================
+  # 3. TEST
+  # ===============================
   test:
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux]
     needs: security
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Run Tests
         run: mvn test
 
-# ===============================
-# 4. SONAR
-# ===============================
+
+  # ===============================
+  # 4. SONAR
+  # ===============================
   sonar:
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux]
     needs: test
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Sonar Scan
         run: |
           mvn verify sonar:sonar \
-          -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }} \
-          -Dsonar.organization=${{ vars.SONAR_ORG }} \
-          -Dsonar.host.url=https://sonarcloud.io \
-          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+            -Dsonar.projectKey="${{ vars.SONAR_PROJECT_KEY }}" \
+            -Dsonar.organization="${{ vars.SONAR_ORG }}" \
+            -Dsonar.host.url="https://sonarcloud.io" \
+            -Dsonar.login="${{ secrets.SONAR_TOKEN }}"
 
-# ===============================
-# 5. DOCKER BUILD
-# ===============================
+
+  # ===============================
+  # 5. DOCKER BUILD
+  # ===============================
   docker:
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux]
     needs: sonar
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Docker Login
-        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login \
-             -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | \
+            docker login \
+            -u "${{ secrets.DOCKER_USERNAME }}" \
+            --password-stdin
 
       - name: Build Image
         run: |
-          docker build -t $IMAGE_NAME:${{ github.sha }} .
-          docker tag $IMAGE_NAME:${{ github.sha }} $IMAGE_NAME:latest
+          docker build -t "$IMAGE_NAME:${{ github.sha }}" .
+          docker tag "$IMAGE_NAME:${{ github.sha }}" "$IMAGE_NAME:latest"
 
       - name: Scan Image
-        run: trivy image $IMAGE_NAME:latest --severity HIGH,CRITICAL --exit-code 0
+        run: |
+          trivy image "$IMAGE_NAME:latest" \
+            --severity HIGH,CRITICAL \
+            --exit-code 0
 
       - name: Push Image
         run: |
-          docker push $IMAGE_NAME:${{ github.sha }}
-          docker push $IMAGE_NAME:latest
+          docker push "$IMAGE_NAME:${{ github.sha }}"
+          docker push "$IMAGE_NAME:latest"
 
-# ===============================
-# 6. DEPLOY TO KIND
-# ===============================
+
+  # ===============================
+  # 6. DEPLOY TO KIND
+  # ===============================
   deploy:
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux]
     needs: docker
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Set K8s Context
-        run: kubectl config use-context $K8S_CONTEXT
+      - name: Check Kubernetes Context
+        run: |
+          kubectl config get-contexts
+          kubectl config use-context "$K8S_CONTEXT"
+
+      - name: Check KIND Cluster
+        run: |
+          kind get clusters
+          kubectl get nodes
 
       - name: Update Image
         run: |
-          sed -i "s|hello8989/bankapp:latest|$IMAGE_NAME:${{ github.sha }}|g" k8s/deployment.yml
+          sed -i \
+            "s|hello8989/bankapp:latest|$IMAGE_NAME:${{ github.sha }}|g" \
+            k8s/deployment.yml
 
       - name: Deploy
-        run: kubectl apply -f k8s/deployment.yml
+        run: |
+          kubectl apply -f k8s/deployment.yml
 
       - name: Wait for MySQL
-        run: kubectl rollout status deployment/mysql
+        run: |
+          kubectl rollout status deployment/mysql --timeout=180s
 
       - name: Wait for App
-        run: kubectl rollout status deployment/bankapp
+        run: |
+          kubectl rollout status deployment/bankapp --timeout=180s
 
       - name: Verify
         run: |
-          kubectl get pods
+          kubectl get pods -o wide
           kubectl get svc
