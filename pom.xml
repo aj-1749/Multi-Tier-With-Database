@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
+
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- ========================================================= -->
+    <!-- Spring Boot Parent                                        -->
+    <!-- ========================================================= -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
@@ -12,6 +17,10 @@
         <relativePath/>
     </parent>
 
+
+    <!-- ========================================================= -->
+    <!-- Project Information                                       -->
+    <!-- ========================================================= -->
     <groupId>com.example</groupId>
     <artifactId>bankapp</artifactId>
     <version>0.0.1-SNAPSHOT</version>
@@ -19,36 +28,54 @@
     <name>bankapp</name>
     <description>Banking Web Application</description>
 
+
+    <!-- ========================================================= -->
+    <!-- Properties                                                -->
+    <!-- ========================================================= -->
     <properties>
+
+        <!-- Java -->
         <java.version>17</java.version>
 
         <!-- JaCoCo -->
         <jacoco.version>0.8.12</jacoco.version>
+
+        <!-- SonarQube -->
+        <sonar.projectKey>bankapp</sonar.projectKey>
+
     </properties>
 
+
+    <!-- ========================================================= -->
+    <!-- Dependencies                                              -->
+    <!-- ========================================================= -->
     <dependencies>
 
-        <!-- Spring Boot -->
+        <!-- Spring Boot JPA -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
+        <!-- Spring Security -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
+        <!-- Thymeleaf -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
 
+        <!-- Spring Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- Thymeleaf Spring Security -->
         <dependency>
             <groupId>org.thymeleaf.extras</groupId>
             <artifactId>thymeleaf-extras-springsecurity6</artifactId>
@@ -61,13 +88,14 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Tests -->
+        <!-- Spring Boot Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
 
+        <!-- Spring Security Test -->
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
@@ -76,16 +104,26 @@
 
     </dependencies>
 
+
+    <!-- ========================================================= -->
+    <!-- Build Plugins                                             -->
+    <!-- ========================================================= -->
     <build>
+
         <plugins>
 
-            <!-- Spring Boot -->
+            <!-- ================================================= -->
+            <!-- Spring Boot Maven Plugin                          -->
+            <!-- ================================================= -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
 
-            <!-- JaCoCo -->
+
+            <!-- ================================================= -->
+            <!-- JaCoCo Code Coverage                              -->
+            <!-- ================================================= -->
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
@@ -93,7 +131,7 @@
 
                 <executions>
 
-                    <!-- Attach JaCoCo agent before tests -->
+                    <!-- Attach JaCoCo Agent -->
                     <execution>
                         <id>prepare-agent</id>
                         <goals>
@@ -101,7 +139,7 @@
                         </goals>
                     </execution>
 
-                    <!-- Generate coverage report -->
+                    <!-- Generate JaCoCo Report -->
                     <execution>
                         <id>report</id>
                         <phase>test</phase>
@@ -111,22 +149,46 @@
                     </execution>
 
                 </executions>
+
+            </plugin>
+
+
+            <!-- ================================================= -->
+            <!-- SonarQube Maven Scanner                           -->
+            <!-- ================================================= -->
+            <plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>5.1.0.4751</version>
             </plugin>
 
         </plugins>
+
     </build>
 
+
+    <!-- ========================================================= -->
+    <!-- Azure DevOps Maven Repository                             -->
+    <!-- ========================================================= -->
     <distributionManagement>
+
         <repository>
             <id>devshack-maven</id>
-            <url>https://pkgs.dev.azure.com/devopsshack1/00e43ab1-00ba-4bf7-9bd4-d333617efea4/_packaging/devshack-maven/maven/v1</url>
+
+            <url>
+                https://pkgs.dev.azure.com/devopsshack1/00e43ab1-00ba-4bf7-9bd4-d333617efea4/_packaging/devshack-maven/maven/v1
+            </url>
+
             <releases>
                 <enabled>true</enabled>
             </releases>
+
             <snapshots>
                 <enabled>true</enabled>
             </snapshots>
+
         </repository>
+
     </distributionManagement>
 
 </project>
