@@ -1,3 +1,4 @@
+```yaml
 name: End-to-End DevSecOps CI/CD (Local KIND)
 
 on:
@@ -56,7 +57,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Java 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -67,9 +68,9 @@ jobs:
 
 
 # ==================================================
-# 4️⃣ SONARCLOUD ANALYSIS
+# 4️⃣ SONARQUBE ANALYSIS - LOCAL
 # ==================================================
-  sonarcloud:
+  sonarqube:
     runs-on: self-hosted
     needs: test
     steps:
@@ -77,15 +78,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: SonarCloud Scan
+      - name: Check SonarQube
+        run: |
+          curl -f http://localhost:9000/api/system/status
+
+      - name: SonarQube Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-            -Dsonar.projectKey="${{ vars.SONAR_PROJECT_KEY }}" \
-            -Dsonar.organization="${{ vars.SONAR_ORGANIZATION }}" \
-            -Dsonar.host.url="https://sonarcloud.io" \
-            -Dsonar.token="$SONAR_TOKEN"
+          mvn verify sonar:sonar \
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }} \
+            -Dsonar.host.url=http://localhost:9000 \
+            -Dsonar.token=$SONAR_TOKEN
 
 
 # ==================================================
@@ -93,7 +97,7 @@ jobs:
 # ==================================================
   docker_build:
     runs-on: self-hosted
-    needs: sonarcloud
+    needs: sonarqube
     steps:
       - uses: actions/checkout@v4
 
@@ -140,3 +144,4 @@ jobs:
           kubectl rollout status deployment/bankapp
           kubectl get pods
           kubectl get svc
+```
